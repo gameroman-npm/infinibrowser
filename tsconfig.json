@@ -11,9 +11,11 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
 
+    // Skip lib check
+    "skipLibCheck": true,
+
     // Max strictness
     "strict": true,
-    "skipLibCheck": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
