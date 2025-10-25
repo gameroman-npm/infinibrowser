@@ -31,7 +31,8 @@
   ],
   "author": "GameRoMan",
   "license": "MIT",
-  "peerDependencies": {
-    "typescript": "^5.9.2"
+  "devDependencies": {
+    "tsdown": "^0.15.9",
+    "typescript": "^5.9.3"
   }
 }
