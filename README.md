@@ -1,3 +1,3 @@
 # infinibrowser
 
-A TypeScript-only wrapper for the Infinibrowser API
+A TypeScript wrapper for the Infinibrowser API
