@@ -1,6 +1,6 @@
 {
   "name": "infinibrowser",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "A TypeScript wrapper for the Infinibrowser API",
   "type": "module",
   "author": "GameRoMan",
