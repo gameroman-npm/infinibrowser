@@ -31,14 +31,17 @@ export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
   public readonly API_URL: TApiUrl;
   private readonly timeout: TTimeOut;
 
-  constructor(config: { API_URL: TApiUrl; timeout: TTimeOut }) {
+  constructor(config: {
+    readonly API_URL: TApiUrl;
+    readonly timeout: TTimeOut;
+  }) {
     this.API_URL = config.API_URL;
     this.timeout = config.timeout;
   }
 
   private async _fetchWithTimeout<T>(
     input: RequestInfo | URL,
-    init: RequestInit = {}
+    init: RequestInit = {},
   ): Promise<T> {
     const controller = new AbortController();
     const id = setTimeout(() => controller.abort(), this.timeout);
@@ -120,7 +123,7 @@ export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
   async shareLineage(steps: ShareLineageType) {
     const path = "/analytics/share";
 
-    const lastStep = steps[steps.length - 1];
+    const lastStep = steps.at(-1);
     if (!lastStep) throw new Error("Lineage must not be empty");
 
     const resultElement = lastStep[2];
@@ -128,13 +131,10 @@ export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
 
     return this._post<{ readonly id: string }>({ path, payload });
   }
-
-  shareMultitargetLineage() {
-    throw new Error("Not implemented");
-  }
 }
 
-const API_URL = "https://infinibrowser.wiki/api";
-type API_URL = typeof API_URL;
+export const API_URL = "https://infinibrowser.wiki/api";
 
-export const ib = new Infinibrowser({ API_URL, timeout: 1000 });
+export const DEFAULT_OPTIONS = { API_URL, timeout: 1000 } as const;
+
+export const ib = new Infinibrowser(DEFAULT_OPTIONS);
