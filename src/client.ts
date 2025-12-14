@@ -10,9 +10,9 @@ import type {
 type Params = Record<string, string | number | boolean | null | undefined>;
 
 const buildUrl = (options: {
-  API_URL: string;
-  path: string;
-  params?: Params;
+  readonly API_URL: string;
+  readonly path: string;
+  readonly params?: Params;
 }): URL => {
   const url = new URL(`${options.API_URL}${options.path}`);
 
@@ -27,43 +27,66 @@ const buildUrl = (options: {
   return url;
 };
 
-export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
-  public readonly API_URL: TApiUrl;
-  private readonly timeout: TTimeOut;
+function mergeRequests(...requests: (RequestInit | undefined)[]): RequestInit {
+  let mergedResult: RequestInit = {};
+  const mergedHeaders = new Headers();
+  for (const request of requests) {
+    if (!request) continue;
+    mergedResult = { ...mergedResult, ...request };
+    new Headers(request.headers).forEach((value, key) => {
+      mergedHeaders.set(key, value);
+    });
+  }
+  mergedResult.headers = mergedHeaders;
+  return mergedResult;
+}
 
-  constructor(config: {
-    readonly API_URL: TApiUrl;
-    readonly timeout: TTimeOut;
-  }) {
-    this.API_URL = config.API_URL;
-    this.timeout = config.timeout;
+interface InfinibrowserConfig<TApiUrl extends string, TTimeOut extends number> {
+  readonly API_URL: TApiUrl;
+  readonly timeout: TTimeOut;
+  readonly request?: Readonly<RequestInit>;
+}
+
+export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
+  public readonly $config: InfinibrowserConfig<TApiUrl, TTimeOut>;
+
+  constructor(config: InfinibrowserConfig<TApiUrl, TTimeOut>) {
+    this.$config = config;
   }
 
-  async #fetchWithTimeout<T>(
-    input: RequestInfo | URL,
-    init: RequestInit = {},
-  ): Promise<T> {
+  $refined<TApiUrl extends string, TTimeOut extends number>(
+    config: InfinibrowserConfig<TApiUrl, TTimeOut>,
+  ): Infinibrowser<TApiUrl, TTimeOut> {
+    return new Infinibrowser({ ...this.$config, ...config });
+  }
+
+  async #fetchWithTimeout<T>(url: URL, init: RequestInit = {}): Promise<T> {
     const controller = new AbortController();
-    const id = setTimeout(() => controller.abort(), this.timeout);
+    const timeout = setTimeout(() => controller.abort(), this.$config.timeout);
 
     try {
-      const response = await fetch(input, {
-        ...init,
+      const requestInit = mergeRequests(this.$config.request, init, {
         signal: controller.signal,
+        headers: { "Accept-Encoding": "gzip, deflate, identity" },
       });
-
+      const request = new Request(url, requestInit);
+      const response = await fetch(request);
       if (!response.ok) {
         throw new Error(`HTTP ${response.status} - ${response.statusText}`);
       }
-
-      return response.json() as Promise<T>;
+      const text = await response.text();
+      const data: T = JSON.parse(text);
+      return data;
     } finally {
-      clearTimeout(id);
+      clearTimeout(timeout);
     }
   }
 
-  async #get<T>(options: { path: string; params?: Params }) {
-    const url = buildUrl({ API_URL: this.API_URL, ...options });
+  async #get<T>(options: {
+    readonly path: string;
+    readonly params?: Params;
+  }): Promise<T> {
+    const url = buildUrl({ API_URL: this.$config.API_URL, ...options });
     return this.#fetchWithTimeout<T>(url, {
       method: "GET",
       headers: { Accept: "application/json" },
@@ -71,11 +94,11 @@ export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
   }
 
   async #post<T>(options: {
-    path: string;
-    params?: Params;
-    payload?: Record<string, unknown>;
-  }) {
-    const url = buildUrl({ API_URL: this.API_URL, ...options });
+    readonly path: string;
+    readonly params?: Params;
+    readonly payload?: Record<string, unknown>;
+  }): Promise<T> {
+    const url = buildUrl({ API_URL: this.$config.API_URL, ...options });
     return this.#fetchWithTimeout<T>(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
