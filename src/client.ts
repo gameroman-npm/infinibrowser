@@ -5,6 +5,8 @@ import type {
   LineageDataType,
   CustomLineageDataType,
   ShareLineageType,
+  UknownElement,
+  InvalidElementId,
 } from "./types";
 
 type Params = Record<string, string | number | boolean | null | undefined>;
@@ -47,6 +49,33 @@ interface InfinibrowserConfig<TApiUrl extends string, TTimeOut extends number> {
   readonly request?: Readonly<RequestInit>;
 }
 
+type FetchResponseError = Readonly<
+  | { ok: false; error_code: "SYNTAX_ERROR"; error: SyntaxError }
+  | { ok: false; error_code: "TIMEOUT"; error: DOMException }
+  | { ok: false; error_code: "UNKNOWN_ERROR"; error: unknown }
+>;
+
+type FetchResponse<T, E = undefined> = Promise<
+  | Readonly<
+      | { ok: true; data: T; response: Response }
+      | { ok: false; error_code: "NOT_OK"; data: E; response: Response }
+    >
+  | FetchResponseError
+>;
+
+function handleError(error: unknown): FetchResponseError {
+  if (error instanceof SyntaxError) {
+    return { ok: false, error_code: "SYNTAX_ERROR", error } as const;
+  }
+  if (error instanceof DOMException) {
+    if (error.name === "AbortError") {
+      return { ok: false, error_code: "TIMEOUT", error } as const;
+    }
+    return { ok: false, error_code: "UNKNOWN_ERROR", error } as const;
+  }
+  return { ok: false, error_code: "UNKNOWN_ERROR", error } as const;
+}
+
 export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
   public readonly $config: InfinibrowserConfig<TApiUrl, TTimeOut>;
 
@@ -60,7 +89,10 @@ export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
     return new Infinibrowser({ ...this.$config, ...config });
   }
 
-  async #fetchWithTimeout<T>(url: URL, init: RequestInit = {}): Promise<T> {
+  async #fetchWithTimeout<T, E = undefined>(
+    url: URL,
+    init: RequestInit = {},
+  ): FetchResponse<T, E> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.$config.timeout);
 
@@ -71,35 +103,40 @@ export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
       });
       const request = new Request(url, requestInit);
       const response = await fetch(request);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status} - ${response.statusText}`);
+      const ok = response.ok;
+      if (!ok) {
+        const text = await response.clone().text();
+        const data: E = JSON.parse(text);
+        return { ok, error_code: "NOT_OK", response, data } as const;
       }
-      const text = await response.text();
+      const text = await response.clone().text();
       const data: T = JSON.parse(text);
-      return data;
+      return { ok, data, response } as const;
+    } catch (error) {
+      return handleError(error);
     } finally {
       clearTimeout(timeout);
     }
   }
 
-  async #get<T>(options: {
+  async #get<T, E = unknown>(options: {
     readonly path: string;
     readonly params?: Params;
-  }): Promise<T> {
+  }): FetchResponse<T, E> {
     const url = buildUrl({ API_URL: this.$config.API_URL, ...options });
-    return this.#fetchWithTimeout<T>(url, {
+    return this.#fetchWithTimeout<T, E>(url, {
       method: "GET",
       headers: { Accept: "application/json" },
     });
   }
 
-  async #post<T>(options: {
+  async #post<T, E = unknown>(options: {
     readonly path: string;
     readonly params?: Params;
     readonly payload?: Record<string, unknown>;
-  }): Promise<T> {
+  }): FetchResponse<T, E> {
     const url = buildUrl({ API_URL: this.$config.API_URL, ...options });
-    return this.#fetchWithTimeout<T>(url, {
+    return this.#fetchWithTimeout<T, E>(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(options.payload ?? {}),
@@ -107,26 +144,35 @@ export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
   }
 
   async getItem(id: string) {
-    return this.#get<ItemDataType>({ path: "/item", params: { id } });
+    return this.#get<ItemDataType, UknownElement>({
+      path: "/item",
+      params: { id },
+    });
   }
 
   async getRecipes(id: string, { offset = 0 }: { offset?: number } = {}) {
-    return this.#get<RecipesDataType>({
+    return this.#get<RecipesDataType, UknownElement>({
       path: "/recipes",
       params: { id, offset },
     });
   }
 
   async getUses(id: string, { offset = 0 }: { offset?: number } = {}) {
-    return this.#get<UsesDataType>({ path: "/uses", params: { id, offset } });
+    return this.#get<UsesDataType, UknownElement>({
+      path: "/uses",
+      params: { id, offset },
+    });
   }
 
   async getLineage(id: string) {
-    return this.#get<LineageDataType>({ path: "/recipe", params: { id } });
+    return this.#get<LineageDataType, UknownElement>({
+      path: "/recipe",
+      params: { id },
+    });
   }
 
   async getCustomLineage(id: string) {
-    return this.#get<CustomLineageDataType>({
+    return this.#get<CustomLineageDataType, InvalidElementId>({
       path: "/recipe/custom",
       params: { id },
     });
