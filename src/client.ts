@@ -55,7 +55,7 @@ type FetchResponseError = Readonly<
   | { ok: false; error_code: "UNKNOWN_ERROR"; error: unknown }
 >;
 
-type FetchResponse<T, E = undefined> = Promise<
+type FetchResponse<T, E = unknown> = Promise<
   | Readonly<
       | { ok: true; data: T; response: Response }
       | { ok: false; error_code: "NOT_OK"; data: E; response: Response }
@@ -89,7 +89,7 @@ export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
     return new Infinibrowser({ ...this.$config, ...config });
   }
 
-  async #fetchWithTimeout<T, E = undefined>(
+  async #fetchWithTimeout<T, E = unknown>(
     url: URL,
     init: RequestInit = {},
   ): FetchResponse<T, E> {
@@ -143,42 +143,56 @@ export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
     });
   }
 
-  async getItem(id: string) {
+  async getItem(id: string): FetchResponse<ItemDataType, UknownElement> {
     return this.#get<ItemDataType, UknownElement>({
       path: "/item",
       params: { id },
     });
   }
 
-  async getRecipes(id: string, { offset = 0 }: { offset?: number } = {}) {
+  async getRecipes(
+    id: string,
+    { offset = 0 }: { offset?: number } = {},
+  ): FetchResponse<RecipesDataType, UknownElement> {
     return this.#get<RecipesDataType, UknownElement>({
       path: "/recipes",
       params: { id, offset },
     });
   }
 
-  async getUses(id: string, { offset = 0 }: { offset?: number } = {}) {
+  async getUses(
+    id: string,
+    { offset = 0 }: { offset?: number } = {},
+  ): FetchResponse<UsesDataType, UknownElement> {
     return this.#get<UsesDataType, UknownElement>({
       path: "/uses",
       params: { id, offset },
     });
   }
 
-  async getLineage(id: string) {
+  async getLineage(id: string): FetchResponse<LineageDataType, UknownElement> {
     return this.#get<LineageDataType, UknownElement>({
       path: "/recipe",
       params: { id },
     });
   }
 
-  async getCustomLineage(id: string) {
+  async getCustomLineage(
+    id: string,
+  ): FetchResponse<LineageDataType, InvalidElementId> {
     return this.#get<CustomLineageDataType, InvalidElementId>({
       path: "/recipe/custom",
       params: { id },
     });
   }
 
-  async optimizeLineage(id: string) {
+  async optimizeLineage(
+    id: string,
+  ): FetchResponse<{
+    readonly id: string;
+    readonly before: number;
+    readonly after: number;
+  }> {
     return this.#post<{
       readonly id: string;
       readonly before: number;
@@ -189,7 +203,9 @@ export class Infinibrowser<TApiUrl extends string, TTimeOut extends number> {
     });
   }
 
-  async shareLineage(steps: ShareLineageType) {
+  async shareLineage(
+    steps: ShareLineageType,
+  ): FetchResponse<{ readonly id: string }> {
     const path = "/analytics/share";
 
     const lastStep = steps.at(-1);
